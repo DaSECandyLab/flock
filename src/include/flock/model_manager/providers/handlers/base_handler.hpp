@@ -86,9 +86,11 @@ public:
                         results[i] = ExtractEmbeddingVector(parsed);
                     }
                 } catch (const std::exception& e) {
+                    std::cerr << ">> response error (JSON parse error):\n" << requests[i].response << "\n";
                     trigger_error(std::string("JSON parse error: ") + e.what());
                 }
             } else {
+                std::cerr << ">> response error (empty or invalid response):\n" << requests[i].response << "\n";
                 trigger_error("Empty or invalid response in batch");
             }
             curl_multi_remove_handle(multi_handle, requests[i].easy);
@@ -115,19 +117,18 @@ protected:
     virtual nlohmann::json ExtractEmbeddingVector(const nlohmann::json&) const { return {}; }
 
     void trigger_error(const std::string& msg) {
+        std::cerr << "[ModelProvider] error. Reason: " << msg << '\n';
         if (_throw_exception) {
             throw std::runtime_error("[ModelProvider] error. Reason: " + msg);
-        } else {
-            std::cerr << "[ModelProvider] error. Reason: " << msg << '\n';
         }
     }
 
     void checkResponse(const nlohmann::json& json, bool is_completion) {
         if (json.contains("error")) {
-            auto reason = json["error"].dump();
-            trigger_error(reason);
             std::cerr << ">> response error :\n"
                       << json.dump(2) << "\n";
+            auto reason = json["error"].dump();
+            trigger_error(reason);
         }
         checkProviderSpecificResponse(json, is_completion);
     }

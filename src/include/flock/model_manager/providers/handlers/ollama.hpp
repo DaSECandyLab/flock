@@ -38,12 +38,12 @@ protected:
         if (is_completion) {
             if ((response.contains("done_reason") && response["done_reason"] != "stop") ||
                 (response.contains("done") && !response["done"].is_null() && response["done"].get<bool>() != true)) {
-                throw std::runtime_error("The request was refused due to some internal error with Ollama API");
+                trigger_error("The request was refused due to some internal error with Ollama API");
             }
         } else {
             // Embedding-specific checks (if any) can be added here
             if (response.contains("embeddings") && (!response["embeddings"].is_array() || response["embeddings"].empty())) {
-                throw std::runtime_error("Ollama API returned empty or invalid embedding data.");
+                trigger_error("Ollama API returned empty or invalid embedding data.");
             }
         }
     }

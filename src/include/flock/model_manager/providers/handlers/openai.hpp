@@ -60,14 +60,14 @@ protected:
                 if (choice.contains("finish_reason") && !choice["finish_reason"].is_null()) {
                     std::string finish_reason = choice["finish_reason"].get<std::string>();
                     if (finish_reason != "stop" && finish_reason != "length") {
-                        throw std::runtime_error("OpenAI API did not finish successfully. finish_reason: " + finish_reason);
+                        trigger_error("OpenAI API did not finish successfully. finish_reason: " + finish_reason);
                     }
                 }
             }
         } else {
             // Embedding-specific checks (if any) can be added here
             if (response.contains("data") && response["data"].is_array() && response["data"].empty()) {
-                throw std::runtime_error("OpenAI API returned empty embedding data.");
+                trigger_error("OpenAI API returned empty embedding data.");
             }
         }
     }

@@ -114,10 +114,9 @@ inline Response Session::validOllamaModelsJson(const std::string& url) {
     if (res_ != CURLE_OK) {
         is_error = true;
         error_msg = " curl_easy_perform() failed: " + std::string{curl_easy_strerror(res_)};
+        std::cerr << error_msg << '\n';
         if (throw_exception_) {
             throw std::runtime_error(error_msg);
-        } else {
-            std::cerr << error_msg << '\n';
         }
     }
     return {response_string, is_error, error_msg};
@@ -187,10 +186,9 @@ inline Response Session::postPrepareOllama(const std::string& contentType) {
     if (res_ != CURLE_OK) {
         is_error = true;
         error_msg = provider_ + " curl_easy_perform() failed: " + std::string{curl_easy_strerror(res_)};
+        std::cerr << error_msg << '\n';
         if (throw_exception_) {
             throw std::runtime_error(error_msg);
-        } else {
-            std::cerr << error_msg << '\n';
         }
     }
     return {response_string, is_error, error_msg};
@@ -260,10 +258,9 @@ inline Response Session::makeRequest(const std::string& contentType) {
     if (res_ != CURLE_OK) {
         is_error = true;
         error_msg = provider_ + " curl_easy_perform() failed: " + std::string{curl_easy_strerror(res_)};
+        std::cerr << error_msg << '\n';
         if (throw_exception_) {
             throw std::runtime_error(error_msg);
-        } else {
-            std::cerr << error_msg << '\n';
         }
     }
 
