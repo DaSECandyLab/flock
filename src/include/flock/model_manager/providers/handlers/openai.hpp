@@ -95,6 +95,7 @@ protected:
             }
             return results;
         }
+        return {};
     }
 };
 
