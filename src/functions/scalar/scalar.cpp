@@ -5,78 +5,86 @@ namespace flock {
 nlohmann::json ScalarFunctionBase::Complete(nlohmann::json& columns, const std::string& user_prompt,
                                             ScalarFunctionType function_type, Model& model) {
     nlohmann::json data;
-    const auto [prompt, media_data] = PromptManager::Render(user_prompt, columns, function_type, model.GetModelDetails().tuple_format);
+    // Simple Prompt Construction
+    std::string prompt = user_prompt;
+    nlohmann::json media_data = nlohmann::json::array();
+
+    // Iterate over columns to replace placeholders
+    for (const auto& column : columns) {
+        if (!column.contains("name") || !column.contains("data") || column["data"].empty()) continue;
+        
+        std::string col_name = column["name"];
+        std::string placeholder = "{{" + col_name + "}}";
+        
+        if (column.contains("type") && column["type"] == "image") {
+             media_data.push_back(column);
+             // For images, we might not replace text placeholders, or we replace with [IMAGE] or similar if needed.
+             // But usually image data is passed separately to AddCompletionRequest.
+             // Assuming user knows how to prompt with images or the backend handles "media_data".
+        } else {
+             // Basic string replacement for text data
+             std::string val_str = column["data"][0].dump(); // Get value as string (quoted if string)
+             if (column["data"][0].is_string()) {
+                val_str = column["data"][0].get<std::string>();
+             }
+             
+             size_t pos = 0;
+             while ((pos = prompt.find(placeholder, pos)) != std::string::npos) {
+                 prompt.replace(pos, placeholder.length(), val_str);
+                 pos += val_str.length();
+             }
+        }
+    }
+
     OutputType output_type = OutputType::STRING;
     if (function_type == ScalarFunctionType::FILTER) {
         output_type = OutputType::BOOL;
     }
 
-    model.AddCompletionRequest(prompt, static_cast<int>(columns[0]["data"].size()), output_type, media_data);
+    model.AddCompletionRequest(prompt, 1, output_type, media_data);
     auto response = model.CollectCompletions();
-    return response[0]["items"];
+    
+    // Wrap the single response item in an array to match expected return signature (though now size is always 1)
+    return nlohmann::json::array({response[0]});
 };
 
 nlohmann::json ScalarFunctionBase::BatchAndComplete(const nlohmann::json& tuples,
                                                     const std::string& user_prompt,
                                                     const ScalarFunctionType function_type, Model& model) {
-    const auto llm_template = PromptManager::GetTemplate(function_type);
-
-    const auto model_details = model.GetModelDetails();
-    auto batch_size = std::min<int>(model.GetModelDetails().batch_size, static_cast<int>(tuples[0]["data"].size()));
-
     auto responses = nlohmann::json::array();
-
-    if (batch_size <= 0) {
-        throw std::runtime_error("Batch size must be greater than zero");
+    
+    // Check if there is data
+    if (tuples.empty() || !tuples[0].contains("data") || tuples[0]["data"].empty()) {
+        return responses;
     }
 
-    auto batch_tuples = nlohmann::json::array();
-    int start_index = 0;
+    int num_rows = static_cast<int>(tuples[0]["data"].size());
 
-    do {
-        batch_tuples.clear();
-
-        for (auto i = 0; i < static_cast<int>(tuples.size()); i++) {
-            batch_tuples.push_back(nlohmann::json::object());
-            for (const auto& item: tuples[i].items()) {
-                if (item.key() != "data") {
-                    batch_tuples[i][item.key()] = item.value();
-                } else {
-                    for (auto j = 0; j < batch_size && start_index + j < static_cast<int>(item.value().size()); j++) {
-                        if (j == 0) {
-                            batch_tuples[i]["data"] = nlohmann::json::array();
-                        }
-                        batch_tuples[i]["data"].push_back(item.value()[start_index + j]);
-                    }
-                }
-            }
+    for (int i = 0; i < num_rows; ++i) {
+        // Construct single-row batch (columnar format but with 1 row)
+        auto single_row_tuples = nlohmann::json::array();
+        for (const auto& col : tuples) {
+            nlohmann::json new_col = col; // Copy metadata
+            new_col["data"] = nlohmann::json::array();
+            new_col["data"].push_back(col["data"][i]);
+            single_row_tuples.push_back(new_col);
         }
-
-        start_index += batch_size;
 
         try {
-            auto response = Complete(batch_tuples, user_prompt, function_type, model);
-
-            if (response.size() < batch_tuples[0]["data"].size()) {
-                for (auto i = static_cast<int>(response.size()); i < batch_tuples[0]["data"].size(); i++) {
-                    response.push_back(nullptr);
-                }
-            } else if (response.size() > batch_tuples[0]["data"].size()) {
-                response.erase(response.begin() + batch_tuples.size(), response.end());
+            auto response = Complete(single_row_tuples, user_prompt, function_type, model);
+            
+            // Allow for null/error handling if needed, but Complete throws or returns.
+            if (!response.empty()) {
+                responses.push_back(response[0]);
+            } else {
+                responses.push_back(nullptr); 
             }
-
-            for (const auto& tuple: response) {
-                responses.push_back(tuple);
-            }
-        } catch (const ExceededMaxOutputTokensError&) {
-            start_index -= batch_size;
-            batch_size = static_cast<int>(batch_size * 0.9);
-            if (batch_size <= 0) {
-                throw std::runtime_error("Batch size reduced to zero, unable to process tuples");
-            }
+        } catch (const std::exception& e) {
+             // Log or handle error? For now, maybe push null or rethrow?
+             // To keep it simple and consistent with previous behavior of throwing on error:
+             throw; 
         }
-
-    } while (start_index < static_cast<int>(tuples[0]["data"].size()));
+    }
 
     return responses;
 }

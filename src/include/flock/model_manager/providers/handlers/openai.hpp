@@ -75,7 +75,12 @@ protected:
         if (response.contains("choices") && response["choices"].is_array() && !response["choices"].empty()) {
             const auto& choice = response["choices"][0];
             if (choice.contains("message") && choice["message"].contains("content")) {
-                return nlohmann::json::parse(choice["message"]["content"].get<std::string>());
+                std::string content = choice["message"]["content"].get<std::string>();
+                try {
+                    return nlohmann::json::parse(content);
+                } catch (const nlohmann::json::parse_error&) {
+                    return content;
+                }
             }
         }
         return {};

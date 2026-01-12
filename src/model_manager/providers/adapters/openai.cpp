@@ -60,15 +60,9 @@ void OpenAIProvider::AddCompletionRequest(const std::string& prompt, const int n
                  {{"name", "flock_response"},
                   {"strict", strict},
                   {"schema", {{"type", "object"}, {"properties", {{"items", {{"type", "array"}, {"minItems", num_output_tuples}, {"maxItems", num_output_tuples}, {"items", schema}}}}}, {"required", {"items"}}, {"additionalProperties", false}}}}}};
-    } else {
-        request_payload["response_format"] = {
-                {"type", "json_schema"},
-                {"json_schema",
-                 {{"name", "flock_response"},
-                  {"strict", false},
-                  {"schema", {{"type", "object"}, {"properties", {{"items", {{"type", "array"}, {"minItems", num_output_tuples}, {"maxItems", num_output_tuples}, {"items", {{"type", GetOutputTypeString(output_type)}}}}}}}}}}}};
-        ;
-    }
+    } 
+    // Removed automatic response_format injection for Structured Output dependency removal
+
 
     model_handler_->AddRequest(request_payload);
 }
